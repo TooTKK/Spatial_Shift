@@ -16,3 +16,5 @@ Thumbs.db
 sam2/
 backend/checkpoints/
 backend/output/
+lama/
+big-lama/
