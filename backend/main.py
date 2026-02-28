@@ -7,7 +7,7 @@ app = FastAPI()
 
 # 配置路径（确保这些文件都在正确的位置）
 CHECKPOINT = "./checkpoints/sam2.1_hiera_large.pt"
-MODEL_CONFIG = "sam2/sam2/configs/sam2.1/sam2.1_hiera_l.yaml" # 源码仓库内的路径
+MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"  # Hydra 在 sam2 包内查找
 
 # 全局初始化单例，避免重复加载模型浪费显存
 sam_engine = SAM2Handler(CHECKPOINT, MODEL_CONFIG)
