@@ -1,0 +1,22 @@
+# Backend Core
+fastapi
+uvicorn
+python-dotenv
+
+# Image Processing
+pillow
+numpy
+opencv-python
+
+# PyTorch (for SAM2 - M4 Mac)
+torch
+torchvision
+torchaudio
+
+# SAM2 (install separately: pip install -e ./sam2)
+# hydra-core  # SAM2 dependency
+# iopath      # SAM2 dependency
+
+# Inpainting APIs
+replicate
+requests
