@@ -1,6 +1,9 @@
 <template>
   <div class="app">
     <h1 class="title">Spatial Shift</h1>
+    <p class="subtitle">
+      Interact with your photos by selecting and moving objects freely.
+    </p>
 
     <!-- 上传框：只有在没有确认图片时显示 -->
     <div v-if="!confirmedUrl" class="upload-panel">
@@ -28,7 +31,10 @@
       <button class="close-btn" @click="closeImage">×</button>
 
       <div class="image-preview">
-        <img :src="confirmedUrl" alt="预览图片" />
+        <img :src="confirmedUrl" alt="预览图片" @click="handleImageClick" />
+        <p v-if="clickedPixel" class="pixel-display">
+          Clicked pixel: {{ clickedPixel.x }}, {{ clickedPixel.y }}
+        </p>
       </div>
     </div>
   </div>
@@ -40,6 +46,7 @@ import { ref } from "vue";
 const fileName = ref("");
 const previewUrl = ref(null);
 const confirmedUrl = ref(null);
+const clickedPixel = ref(null);
 
 const handleUpload = (event) => {
   const file = event.target.files[0];
@@ -57,6 +64,19 @@ const closeImage = () => {
   confirmedUrl.value = null;
   previewUrl.value = null;
   fileName.value = "";
+};
+
+const handleImageClick = (event) => {
+  const rect = event.target.getBoundingClientRect();
+
+  // 获取点击位置相对于图片左上角的像素坐标
+  const x = event.clientX - rect.left;
+  const y = event.clientY - rect.top;
+
+  console.log("Clicked pixel:", x, y);
+
+  // 你现在先打印，之后这里会改成发送给后端
+  clickedPixel.value = { x, y };
 };
 </script>
 
@@ -214,5 +234,12 @@ const closeImage = () => {
   object-fit: contain;
   border-radius: 12px;
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.1);
+}
+
+.pixel-display {
+  margin-top: 10px;
+  font-size: 14px;
+  color: #888;
+  text-align: center;
 }
 </style>
