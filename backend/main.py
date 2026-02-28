@@ -1,11 +1,12 @@
 from fastapi import FastAPI, HTTPException
-from sam_helper import SAM2Handler # 导入你写的工具类
+from sam import SAM2Handler # 导入你写的工具类
+import sys
 import os
-
+sys.path.append(os.path.join(os.path.dirname(__file__), "sam2"))
 app = FastAPI()
 
 # 配置路径（确保这些文件都在正确的位置）
-CHECKPOINT = "./backend/checkpoints/sam2.1_hiera_large.pt"
+CHECKPOINT = "./checkpoints/sam2.1_hiera_large.pt"
 MODEL_CONFIG = "sam2/sam2/configs/sam2.1/sam2.1_hiera_l.yaml" # 源码仓库内的路径
 
 # 全局初始化单例，避免重复加载模型浪费显存
