@@ -35,34 +35,24 @@ def test_cloud_pipeline(image_path, x, y):
         
         sam_engine = SAM2Handler(CHECKPOINT, MODEL_CONFIG)
         
-        # 执行分割
+        # 使用智能识别（自动识别相关物体，如椅子脚、枕头等）
         from PIL import Image
-        image_pil = Image.open(image_path).convert("RGB")
-        image_np = np.array(image_pil)
-        
-        sam_engine.predictor.set_image(image_np)
-        
-        input_point = np.array([[x, y]])
-        input_label = np.array([1])
-        masks, scores, _ = sam_engine.predictor.predict(
-            point_coords=input_point,
-            point_labels=input_label,
-            multimask_output=False,
-        )
-        
-        mask = masks[0]
-        score = float(scores[0])
-        
-        print(f"✅ SAM 分割完成！置信度: {score:.4f}")
-        print()
-        
-        # 保存家具切片
         os.makedirs("output/furniture", exist_ok=True)
         furniture_path = f"output/furniture/cutout_{os.path.basename(image_path)}"
-        original_rgba = Image.open(image_path).convert("RGBA")
-        mask_alpha = Image.fromarray((mask * 255).astype(np.uint8)).resize(original_rgba.size)
-        original_rgba.putalpha(mask_alpha)
-        original_rgba.save(furniture_path)
+        
+        result_path, score, related_count = sam_engine.process_segmentation_smart(
+            image_path, x, y, furniture_path, iou_threshold=0.1
+        )
+        
+        print(f"✅ 智能识别完成！")
+        print(f"   置信度: {score:.4f}")
+        print(f"   额外识别到 {related_count} 个相关物体（如脚、靠枕等）")
+        print()
+        
+        # 读取生成的mask用于后续inpainting
+        furniture_img = Image.open(furniture_path)
+        mask = np.array(furniture_img.split()[-1]) > 128
+        
         print(f"📦 家具切片已保存: {furniture_path}")
         print()
         
