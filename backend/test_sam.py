@@ -1,72 +1,72 @@
 """
-SAM 2 本地测试脚本
-用法：python test_sam.py <图片路径> <x坐标> <y坐标>
-例如：python test_sam.py test_image.jpg 500 300
+SAM 2 local test script
+Usage: python test_sam.py <image_path> <x_coord> <y_coord>
+Example: python test_sam.py test_image.jpg 500 300
 """
 import sys
 import os
 
-# 添加 sam2 到路径
+# Add sam2 to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "../sam2"))
 
 from sam import SAM2Handler
 
 def test_segmentation(image_path, x, y):
-    """测试 SAM 分割功能"""
-    # 检查图片是否存在
+    """Test SAM segmentation functionality"""
+    # Check if image exists
     if not os.path.exists(image_path):
-        print(f"❌ 图片不存在: {image_path}")
+        print(f"❌ Image does not exist: {image_path}")
         return
     
     print("=" * 60)
-    print("🚀 开始测试 SAM 2 分割功能")
+    print("🚀 Starting SAM 2 segmentation test")
     print("=" * 60)
-    print(f"📷 输入图片: {image_path}")
-    print(f"📍 点击坐标: ({x}, {y})")
+    print(f"📷 Input image: {image_path}")
+    print(f"📍 Click coordinates: ({x}, {y})")
     print()
     
-    # 配置路径
+    # Configuration paths
     CHECKPOINT = "./checkpoints/sam2.1_hiera_large.pt"
     MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
     
     try:
-        # 初始化 SAM 处理器
-        print("⏳ 正在加载 SAM 2 模型...")
+        # Initialize SAM handler
+        print("⌛ Loading SAM 2 model...")
         sam_engine = SAM2Handler(CHECKPOINT, MODEL_CONFIG)
-        print("✅ 模型加载成功！")
+        print("✅ Model loaded successfully!")
         print()
         
-        # 创建输出目录
+        # Create output directory
         os.makedirs("output", exist_ok=True)
         output_path = os.path.join("output", f"furniture_{os.path.basename(image_path).rsplit('.', 1)[0]}.png")
         
-        # 执行分割
-        print("⏳ 正在执行分割...")
+        # Execute segmentation
+        print("⌛ Executing segmentation...")
         result_path, score = sam_engine.process_segmentation(image_path, x, y, output_path)
         
         print("=" * 60)
-        print("✅ 分割完成！")
+        print("✅ Segmentation complete!")
         print("=" * 60)
-        print(f"📁 输出文件: {result_path}")
-        print(f"🎯 置信度分数: {score:.4f}")
+        print(f"📁 Output file: {result_path}")
+        print(f"🎯 Confidence score: {score:.4f}")
         print()
-        print("💡 提示: 打开输出文件查看分割出的家具（透明背景PNG）")
+        print("💡 Tip: Open the output file to view the segmented furniture (transparent background PNG)")
         
     except Exception as e:
         print("=" * 60)
-        print("❌ 测试失败！")
+        print("❌ Test failed!")
         print("=" * 60)
-        print(f"错误信息: {str(e)}")
+        print(f"Error message: {str(e)}")
         import traceback
         traceback.print_exc()
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print("使用方法: python test_sam.py <图片路径> <x坐标> <y坐标>")
-        print("例如: python test_sam.py test_image.jpg 500 300")
+        print("Usage: python test_sam.py <image_path> <x_coord> <y_coord>")
+        print("Example: python test_sam.py test_image.jpg 500 300")
         print()
-        print("提示: 坐标是你想要分割的物体上的任意一点")
+        print("Tip: The coordinates should be any point on the object you want to segment")
         sys.exit(1)
     
     image_path = sys.argv[1]

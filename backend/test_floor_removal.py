@@ -1,50 +1,50 @@
 """
-测试智能地板移除功能
+Test smart floor removal functionality
 """
 import sys
 from pathlib import Path
 
-# 测试点击家具，看是否会自动移除地板
+# Test clicking on furniture to see if floor is automatically removed
 if __name__ == "__main__":
     from sam import SAM2Handler
     
-    print("=== 测试智能地板移除功能 ===\n")
+    print("=== Test smart floor removal functionality ===\n")
     
-    # 初始化 SAM
+    # Initialize SAM
     checkpoint = "checkpoints/sam2.1_hiera_large.pt"
     config = "configs/sam2.1/sam2.1_hiera_l.yaml"
     
     if not Path(checkpoint).exists():
-        print(f"❌ 找不到模型文件: {checkpoint}")
+        print(f"❌ Model file not found: {checkpoint}")
         sys.exit(1)
     
     sam = SAM2Handler(checkpoint, config)
     
-    # 请用户提供测试图片和坐标
-    print("请提供测试参数：")
-    image_path = input("图片路径 (例如: uploads/test.jpg): ").strip()
+    # Ask user for test image and coordinates
+    print("Please provide test parameters:")
+    image_path = input("Image path (e.g., uploads/test.jpg): ").strip()
     
     if not Path(image_path).exists():
-        print(f"❌ 找不到图片: {image_path}")
+        print(f"❌ Image not found: {image_path}")
         sys.exit(1)
     
-    x = int(input("点击家具的 X 坐标: "))
-    y = int(input("点击家具的 Y 坐标: "))
+    x = int(input("Click X coordinate on furniture: "))
+    y = int(input("Click Y coordinate on furniture: "))
     
     output_path = "output/furniture/test_floor_removal.png"
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     
-    print(f"\n🔄 开始分割...")
-    print(f"   图片: {image_path}")
-    print(f"   坐标: ({x}, {y})")
+    print(f"\n🔄 Starting segmentation...")
+    print(f"   Image: {image_path}")
+    print(f"   Coordinates: ({x}, {y})")
     
-    # 执行智能分割（会自动检测并移除地板）
+    # Execute smart segmentation (automatically detects and removes floor)
     result_path, score, related_count = sam.process_segmentation_smart(
         image_path, x, y, output_path
     )
     
-    print(f"\n✅ 分割完成！")
-    print(f"   输出: {result_path}")
-    print(f"   置信度: {score:.3f}")
-    print(f"   相关物体: {related_count} 个")
-    print(f"\n检查输出图片，看地板是否被正确移除 👀")
+    print(f"\n✅ Segmentation complete!")
+    print(f"   Output: {result_path}")
+    print(f"   Confidence: {score:.3f}")
+    print(f"   Related objects: {related_count} items")
+    print(f"\nCheck the output image to see if the floor was correctly removed 👀")
