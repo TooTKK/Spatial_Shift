@@ -113,10 +113,10 @@ async def segment_furniture(
         
         image_path = str(image_files[0])
         
-        # SAM分割
+        # SAM智能分割（自动识别相关物体，如椅子腿、枕头等）
         furniture_output = OUTPUT_DIR / "furniture" / f"{image_id}_furniture.png"
-        result_path, score = sam_engine.process_segmentation(
-            image_path, x, y, str(furniture_output)
+        result_path, score, related_count = sam_engine.process_segmentation_smart(
+            image_path, x, y, str(furniture_output), iou_threshold=0.1
         )
         
         # TODO: 计算边界框（用于前端显示红框）
@@ -310,4 +310,4 @@ async def full_pipeline(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

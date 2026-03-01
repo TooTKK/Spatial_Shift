@@ -1,12 +1,14 @@
 # Backend Core
 fastapi
-uvicorn
+uvicorn[standard]
 python-dotenv
+python-multipart  # For file uploads
 
 # Image Processing
 pillow
 numpy
 opencv-python
+opencv-contrib-python  # For advanced CV algorithms
 
 # PyTorch (for SAM2 - M4 Mac)
 torch

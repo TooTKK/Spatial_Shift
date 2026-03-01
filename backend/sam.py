@@ -116,6 +116,9 @@ class SAM2Handler:
                 continue
             final_mask = np.logical_or(final_mask, mask)
         
+        # 5.5. 智能移除地板（如果存在）
+        final_mask = self._remove_floor_from_mask(final_mask, image_np)
+        
         # 6. 保存透明PNG
         original_rgba = Image.open(image_path).convert("RGBA")
         mask_alpha = Image.fromarray((final_mask * 255).astype(np.uint8)).resize(original_rgba.size)
@@ -156,3 +159,110 @@ class SAM2Handler:
         union_area = bbox1_area + bbox2_area - inter_area
         
         return inter_area / union_area if union_area > 0 else 0.0
+    
+    def _remove_floor_from_mask(self, mask, image_np):
+        """
+        智能移除地板区域（如果存在）
+        
+        策略：
+        1. 只分析底部 30% 区域
+        2. 检测是否有大面积横向连续区域（地板特征）
+        3. 通过形状（宽高比）判断是否为地板
+        4. 使用颜色过滤移除相似颜色的底部区域
+        5. 保护机制：底部区域太小则不处理
+        
+        Args:
+            mask: 布尔型 mask 数组
+            image_np: 原始图像数组（用于颜色分析）
+        
+        Returns:
+            处理后的 mask
+        """
+        from scipy import ndimage
+        
+        height, width = mask.shape
+        
+        # 1. 分析底部 30% 区域
+        bottom_threshold = int(height * 0.7)  # 从 70% 高度开始往下
+        bottom_mask = mask.copy()
+        bottom_mask[:bottom_threshold, :] = False  # 只保留底部
+        
+        bottom_area = np.sum(bottom_mask)
+        total_area = np.sum(mask)
+        
+        # 保护机制：如果底部区域太小，说明没地板
+        if total_area == 0 or bottom_area / total_area < 0.15:
+            print("   ℹ️  底部区域较小，无需处理")
+            return mask
+        
+        print(f"   🔍 检测到底部区域占比 {bottom_area/total_area*100:.1f}%，分析地板...")
+        
+        # 2. 检查底部是否是"横向大面积连续"（地板特征）
+        # 使用连通域分析
+        labeled_bottom, num_features = ndimage.label(bottom_mask)
+        
+        if num_features == 0:
+            return mask
+        
+        # 找到最大的连通域（可能是地板）
+        largest_component_size = 0
+        largest_component_label = 0
+        for i in range(1, num_features + 1):
+            size = np.sum(labeled_bottom == i)
+            if size > largest_component_size:
+                largest_component_size = size
+                largest_component_label = i
+        
+        # 如果最大连通域占底部区域不到 50%，说明不是地板
+        if largest_component_size / bottom_area < 0.5:
+            print("   ℹ️  底部无大面积连续区域，无需处理")
+            return mask
+        
+        # 3. 分析最大连通域的形状（宽高比）
+        largest_component_mask = (labeled_bottom == largest_component_label)
+        rows = np.any(largest_component_mask, axis=1)
+        cols = np.any(largest_component_mask, axis=0)
+        
+        if not (rows.any() and cols.any()):
+            return mask
+        
+        y1, y2 = np.where(rows)[0][[0, -1]]
+        x1, x2 = np.where(cols)[0][[0, -1]]
+        
+        component_height = y2 - y1 + 1
+        component_width = x2 - x1 + 1
+        aspect_ratio = component_width / component_height if component_height > 0 else 0
+        
+        # 地板通常是扁平的（宽高比 > 2）
+        if aspect_ratio < 2:
+            print(f"   ℹ️  底部区域宽高比 {aspect_ratio:.2f}，不像地板")
+            return mask
+        
+        print(f"   ✅ 检测到地板特征（宽高比 {aspect_ratio:.2f}），开始颜色过滤...")
+        
+        # 4. 颜色分析：提取底部连通域的主色调
+        bottom_region_pixels = image_np[largest_component_mask]
+        
+        if len(bottom_region_pixels) == 0:
+            return mask
+        
+        # 计算主色调（中位数，比均值更鲁棒）
+        main_color = np.median(bottom_region_pixels, axis=0)
+        
+        # 5. 移除与主色调相似的底部区域
+        # 计算每个像素与主色调的颜色距离（欧式距离）
+        color_distance = np.sqrt(np.sum((image_np - main_color) ** 2, axis=2))
+        
+        # 设置阈值（欧式距离 < 50 认为是相似颜色）
+        similar_color_mask = color_distance < 50
+        
+        # 只在底部区域应用颜色过滤
+        floor_to_remove = largest_component_mask & similar_color_mask
+        
+        # 6. 从原始 mask 中移除地板
+        cleaned_mask = mask & ~floor_to_remove
+        
+        removed_area = np.sum(floor_to_remove)
+        print(f"   ✂️  移除地板区域：{removed_area} 像素 ({removed_area/total_area*100:.1f}%)")
+        
+        return cleaned_mask
