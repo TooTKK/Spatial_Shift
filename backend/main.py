@@ -14,45 +14,45 @@ import uuid
 sys.path.append(os.path.join(os.path.dirname(__file__), "sam2"))
 app = FastAPI(title="Spatial Shift API", version="1.0.0")
 
-# CORS配置（允许前端访问）
+# CORS configuration (allow frontend access)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 生产环境应限制具体域名
+    allow_origins=["*"],  # In production, should restrict to specific domains
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 配置路径
+# Configure paths
 CHECKPOINT = "./checkpoints/sam2.1_hiera_large.pt"
 MODEL_CONFIG = "configs/sam2.1/sam2.1_hiera_l.yaml"
 OUTPUT_DIR = Path("output")
 UPLOAD_DIR = Path("uploads")
 
-# 创建必要目录
+# Create necessary directories
 for dir_path in [OUTPUT_DIR, UPLOAD_DIR, 
                  OUTPUT_DIR / "furniture", 
                  OUTPUT_DIR / "backgrounds", 
                  OUTPUT_DIR / "placed"]:
     dir_path.mkdir(parents=True, exist_ok=True)
 
-# 全局初始化（避免重复加载模型）
+# Global initialization (avoid reloading models)
 sam_engine = SAM2Handler(CHECKPOINT, MODEL_CONFIG)
 inpainter = CloudInpainter()
 placer = FurniturePlacer()
 
-print("✅ Spatial Shift API 启动成功")
+print("✅ Spatial Shift API started successfully")
 
 
 def image_to_base64(image_path: str) -> str:
-    """将图片转换为Base64编码"""
+    """Convert image to Base64 encoding"""
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode("utf-8")
 
 
 @app.get("/")
 async def root():
-    """健康检查"""
+    """Health check"""
     return {
         "service": "Spatial Shift API",
         "status": "running",
@@ -63,16 +63,16 @@ async def root():
 @app.post("/upload")
 async def upload_image(file: UploadFile = File(...)):
     """
-    上传室内照片
+    Upload indoor photo
     Returns: {"image_id": "xxx", "filename": "xxx.jpg"}
     """
     try:
-        # 生成唯一ID
+        # Generate unique ID
         image_id = str(uuid.uuid4())
         file_ext = Path(file.filename).suffix
         save_path = UPLOAD_DIR / f"{image_id}{file_ext}"
         
-        # 保存文件
+        # Save file
         with save_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
         
@@ -82,7 +82,7 @@ async def upload_image(file: UploadFile = File(...)):
             "path": str(save_path)
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"上传失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
 
 @app.post("/segment")
@@ -92,35 +92,35 @@ async def segment_furniture(
     y: int = Form(...)
 ):
     """
-    步骤1: 分割家具
+    Step 1: Segment furniture
     
     Args:
-        image_id: 上传图片的ID
-        x, y: 用户点击的坐标
+        image_id: ID of uploaded image
+        x, y: User click coordinates
     
     Returns:
         {
-            "furniture_mask": "base64_image",  # 透明PNG家具抠图
+            "furniture_mask": "base64_image",  # Transparent PNG furniture cutout
             "score": 0.98,
-            "bbox": [x1, y1, x2, y2]  # 边界框坐标，供前端显示
+            "bbox": [x1, y1, x2, y2]  # Bounding box coordinates for frontend display
         }
     """
     try:
-        # 查找原图
+        # Find original image
         image_files = list(UPLOAD_DIR.glob(f"{image_id}.*"))
         if not image_files:
-            raise HTTPException(status_code=404, detail="图片不存在")
+            raise HTTPException(status_code=404, detail="Image not found")
         
         image_path = str(image_files[0])
         
-        # SAM智能分割（自动识别相关物体，如椅子腿、枕头等）
+        # SAM intelligent segmentation (automatically identify related objects like chair legs, pillows, etc.)
         furniture_output = OUTPUT_DIR / "furniture" / f"{image_id}_furniture.png"
         result_path, score, related_count = sam_engine.process_segmentation_smart(
             image_path, x, y, str(furniture_output), iou_threshold=0.1
         )
         
-        # TODO: 计算边界框（用于前端显示红框）
-        # 这里简化处理，可以通过mask计算精确bbox
+        # TODO: Calculate bounding box (for frontend display red box)
+        # Simplified here, can calculate precise bbox through mask
         from PIL import Image
         import numpy as np
         
@@ -134,7 +134,7 @@ async def segment_furniture(
             x1, x2 = np.where(cols)[0][[0, -1]]
             bbox = [int(x1), int(y1), int(x2), int(y2)]
         else:
-            bbox = [x-50, y-50, x+50, y+50]  # 降级方案
+            bbox = [x-50, y-50, x+50, y+50]  # Fallback solution
         
         return {
             "furniture_mask": image_to_base64(result_path),
@@ -143,7 +143,7 @@ async def segment_furniture(
             "bbox": bbox
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"分割失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Segmentation failed: {str(e)}")
 
 
 @app.post("/remove_furniture")
@@ -152,27 +152,27 @@ async def remove_furniture(
     furniture_mask_path: str = Form(...)
 ):
     """
-    步骤2: 移除家具，生成干净背景
+    Step 2: Remove furniture, generate clean background
     
     Args:
-        image_id: 图片ID
-        furniture_mask_path: 分割得到的家具mask路径
+        image_id: Image ID
+        furniture_mask_path: Furniture mask path obtained from segmentation
     
     Returns:
         {
-            "clean_background": "base64_image",  # 干净背景
+            "clean_background": "base64_image",  # Clean background
             "background_path": "output/backgrounds/xxx.png"
         }
     """
     try:
-        # 查找原图
+        # Find original image
         image_files = list(UPLOAD_DIR.glob(f"{image_id}.*"))
         if not image_files:
-            raise HTTPException(status_code=404, detail="图片不存在")
+            raise HTTPException(status_code=404, detail="Image not found")
         
         image_path = str(image_files[0])
         
-        # Inpainting移除家具
+        # Inpainting to remove furniture
         background_output = OUTPUT_DIR / "backgrounds" / f"{image_id}_clean_bg.png"
         clean_bg_path = inpainter.inpaint(
             image_path,
@@ -185,7 +185,7 @@ async def remove_furniture(
             "background_path": clean_bg_path
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"背景移除失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Background removal failed: {str(e)}")
 
 
 @app.post("/place_furniture")
@@ -200,19 +200,19 @@ async def place_furniture(
     use_ai: bool = Form(True)
 ):
     """
-    步骤3: 将家具放置到新位置
+    Step 3: Place furniture at new location
     
     Args:
-        image_id: 图片ID
-        furniture_mask_path: 家具抠图路径
-        background_path: 干净背景路径
-        new_x, new_y: 新位置坐标
-        original_x, original_y: 原位置坐标（用于估算缩放）
-        use_ai: 是否使用AI融合（True=SD, False=Poisson）
+        image_id: Image ID
+        furniture_mask_path: Furniture cutout path
+        background_path: Clean background path
+        new_x, new_y: New position coordinates
+        original_x, original_y: Original position coordinates (for scale estimation)
+        use_ai: Whether to use AI blending (True=SD, False=Poisson)
     
     Returns:
         {
-            "final_image": "base64_image",  # 最终效果图
+            "final_image": "base64_image",  # Final result image
             "method": "ai_blend" or "poisson_blend"
         }
     """
@@ -229,7 +229,7 @@ async def place_furniture(
             )
             method = "ai_blend"
             
-            # 如果AI失败，result_path可能是Poisson的结果
+            # If AI fails, result_path might be Poisson result
             if result_path is None:
                 result_path = placer.poisson_blend(
                     furniture_mask_path,
@@ -255,7 +255,7 @@ async def place_furniture(
             "method": method
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"家具放置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Furniture placement failed: {str(e)}")
 
 
 @app.post("/full_pipeline")
@@ -268,25 +268,25 @@ async def full_pipeline(
     use_ai: bool = Form(True)
 ):
     """
-    完整流程：上传 -> 分割 -> 移除 -> 放置
+    Complete pipeline: upload -> segment -> remove -> place
     
-    一次性完成所有步骤（适合简单场景）
+    Complete all steps at once (suitable for simple scenarios)
     """
     try:
-        # 1. 上传
+        # 1. Upload
         upload_result = await upload_image(file)
         image_id = upload_result["image_id"]
         
-        # 2. 分割
+        # 2. Segment
         segment_result = await segment_furniture(image_id, segment_x, segment_y)
         
-        # 3. 移除
+        # 3. Remove
         remove_result = await remove_furniture(
             image_id, 
             segment_result["furniture_path"]
         )
         
-        # 4. 放置
+        # 4. Place
         place_result = await place_furniture(
             image_id,
             segment_result["furniture_path"],
@@ -305,7 +305,7 @@ async def full_pipeline(
             "method": place_result["method"]
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"流程失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Pipeline failed: {str(e)}")
 
 
 if __name__ == "__main__":

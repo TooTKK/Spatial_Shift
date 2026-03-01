@@ -93,29 +93,7 @@ Frontend runs at `http://localhost:5173`
 5. Wait for processing (AI generates the result)
 6. View the final image with furniture at the new position
 
-### API Endpoints
-
-**Full Pipeline:**
-```bash
-curl -X POST "http://localhost:8000/full_pipeline" \
-  -F "file=@room.jpg" \
-  -F "segment_x=200" \
-  -F "segment_y=300" \
-  -F "place_x=500" \
-  -F "place_y=400" \
-  -F "use_ai=false"
-```
-
-Returns:
-```json
-{
-  "image_id": "xxx",
-  "furniture_bbox": [x1, y1, x2, y2],
-  "final_image": "base64_encoded_image"
-}
-```
-
----
+--
 
 ## Architecture
 
@@ -193,11 +171,6 @@ python test_sam.py          # Test SAM segmentation
 python test_placement.py    # Test furniture placement
 python test_backend.py      # Backend health check
 ```
-
-### API Documentation
-
-Visit `http://localhost:8000/docs` for interactive API documentation.
-
 ---
 
 ## Notes
@@ -207,4 +180,4 @@ Visit `http://localhost:8000/docs` for interactive API documentation.
 
 ---
 
-**Built for HackIllinois 2025**
+**Built for HackIllinois 2026**

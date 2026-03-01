@@ -7,47 +7,47 @@ from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
 class SAM2Handler:
     def __init__(self, checkpoint_path, model_config):
-        # 自动选择设备：M4 优先使用 mps
+        # Auto select device: M4 prioritizes mps
         self.device = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
-        print(f"--- SAM 2 正在初始化，使用设备: {self.device} ---")
+        print(f"--- SAM 2 initializing, using device: {self.device} ---")
         
-        # 加载模型
+        # Load model
         self.model = build_sam2(model_config, checkpoint_path, device=self.device)
         self.predictor = SAM2ImagePredictor(self.model)
         
-        # 初始化自动分割器（用于智能识别）
+        # Initialize automatic segmenter (for intelligent recognition)
         self.auto_generator = SAM2AutomaticMaskGenerator(
             self.model,
-            points_per_side=16,  # 降低采样点，加快速度
+            points_per_side=16,  # Reduce sampling points to speed up
             pred_iou_thresh=0.7,
             stability_score_thresh=0.85
         )
-        print("✅ 智能识别模式已启用")
+        print("✅ Intelligent recognition mode enabled")
 
     def process_segmentation(self, image_path, x, y, output_path):
-        """核心功能：加载图片 -> 预测遮罩 -> 抠出家具"""
-        # 1. 读取并预处理图片
+        """Core functionality: Load image -> Predict mask -> Extract furniture"""
+        # 1. Read and preprocess image
         image = Image.open(image_path).convert("RGB")
         image_np = np.array(image)
         
-        # 2. 设置预测器图片 (这一步会生成图像特征)
+        # 2. Set predictor image (this step generates image features)
         self.predictor.set_image(image_np)
 
-        # 3. 根据点击坐标预测
+        # 3. Predict based on click coordinates
         input_point = np.array([[x, y]])
-        input_label = np.array([1]) # 1 表示选中
+        input_label = np.array([1]) # 1 means selected
 
         masks, scores, _ = self.predictor.predict(
             point_coords=input_point,
             point_labels=input_label,
-            multimask_output=False, # 只要最准确的一个
+            multimask_output=False, # Only want the most accurate one
         )
 
-        # 4. 处理遮罩并保存透明 PNG
+        # 4. Process mask and save transparent PNG
         mask = masks[0]
         original_rgba = Image.open(image_path).convert("RGBA")
         
-        # 将布尔型 mask 转为 255 的 Alpha 通道
+        # Convert boolean mask to 255 Alpha channel
         mask_alpha = Image.fromarray((mask * 255).astype(np.uint8)).resize(original_rgba.size)
         original_rgba.putalpha(mask_alpha)
         
@@ -56,25 +56,25 @@ class SAM2Handler:
     
     def process_segmentation_smart(self, image_path, x, y, output_path, iou_threshold=0.1):
         """
-        智能分割：点击书桌后，自动识别桌上所有物品
+        Intelligent segmentation: After clicking desk, automatically identify all items on desk
         
         Args:
-            image_path: 图片路径
-            x, y: 点击坐标
-            output_path: 输出路径
-            iou_threshold: IoU阈值（默认0.1，物体与主物体有10%重叠就算相关）
+            image_path: Image path
+            x, y: Click coordinates
+            output_path: Output path
+            iou_threshold: IoU threshold (default 0.1, objects with 10% overlap with main object are considered related)
         
         Returns:
             (output_path, score, related_count)
         """
-        print(f"🧠 智能识别模式：分析点击位置 ({x}, {y})...")
+        print(f"🧠 Intelligent recognition mode: Analyzing click position ({x}, {y})...")
         
-        # 1. 读取图片
+        # 1. Read image
         image = Image.open(image_path).convert("RGB")
         image_np = np.array(image)
         self.predictor.set_image(image_np)
         
-        # 2. 识别主物体（点击的书桌）
+        # 2. Identify main object (clicked desk)
         input_point = np.array([[x, y]])
         input_label = np.array([1])
         main_masks, main_scores, _ = self.predictor.predict(
@@ -82,53 +82,53 @@ class SAM2Handler:
             point_labels=input_label,
             multimask_output=False,
         )
-        main_mask = main_masks[0].astype(bool)  # 确保是bool类型
+        main_mask = main_masks[0].astype(bool)  # Ensure it's bool type
         main_bbox = self._get_bbox_from_mask(main_mask)
-        print(f"   主物体识别完成，边界: {main_bbox}")
+        print(f"   Main object identification complete, bbox: {main_bbox}")
         
-        # 3. 自动识别图片中所有物体
-        print("   🔍 扫描所有物体...")
+        # 3. Automatically identify all objects in image
+        print("   🔍 Scanning all objects...")
         all_masks = self.auto_generator.generate(image_np)
-        print(f"   发现 {len(all_masks)} 个物体")
+        print(f"   Found {len(all_masks)} objects")
         
-        # 4. 找出与主物体重叠的相关物体
+        # 4. Find related objects that overlap with main object
         related_masks = [main_mask]
         for mask_data in all_masks:
             mask = mask_data['segmentation']
             bbox = self._get_bbox_from_mask(mask)
             
-            # 计算与主物体的IoU
+            # Calculate IoU with main object
             iou = self._calculate_iou(bbox, main_bbox)
             
             if iou > iou_threshold:
-                # 确保mask是bool类型
+                # Ensure mask is bool type
                 mask_bool = mask.astype(bool) if mask.dtype != bool else mask
                 related_masks.append(mask_bool)
-                print(f"   ✓ 发现相关物体，IoU={iou:.2f}, bbox={bbox}")
+                print(f"   ✓ Found related object, IoU={iou:.2f}, bbox={bbox}")
         
-        print(f"   📦 共识别到 {len(related_masks)} 个相关物体（含主物体）")
+        print(f"   📦 Total identified {len(related_masks)} related objects (including main object)")
         
-        # 5. 合并所有mask（使用numpy的逻辑或）
+        # 5. Merge all masks (using numpy logical or)
         final_mask = np.zeros_like(main_mask, dtype=bool)
         for mask in related_masks:
-            # 确保尺寸一致
+            # Ensure size consistency
             if mask.shape != final_mask.shape:
                 continue
             final_mask = np.logical_or(final_mask, mask)
         
-        # 5.5. 智能移除地板（如果存在）
+        # 5.5. Intelligently remove floor (if exists)
         final_mask = self._remove_floor_from_mask(final_mask, image_np)
         
-        # 6. 保存透明PNG
+        # 6. Save transparent PNG
         original_rgba = Image.open(image_path).convert("RGBA")
         mask_alpha = Image.fromarray((final_mask * 255).astype(np.uint8)).resize(original_rgba.size)
         original_rgba.putalpha(mask_alpha)
         original_rgba.save(output_path)
         
-        return output_path, float(main_scores[0]), len(related_masks) - 1  # 返回额外识别的物体数
+        return output_path, float(main_scores[0]), len(related_masks) - 1  # Return count of additionally identified objects
     
     def _get_bbox_from_mask(self, mask):
-        """从mask获取边界框 [x1, y1, x2, y2]"""
+        """Get bounding box from mask [x1, y1, x2, y2]"""
         rows = np.any(mask, axis=1)
         cols = np.any(mask, axis=0)
         if rows.any() and cols.any():
@@ -138,11 +138,11 @@ class SAM2Handler:
         return [0, 0, 0, 0]
     
     def _calculate_iou(self, bbox1, bbox2):
-        """计算两个边界框的IoU"""
+        """Calculate IoU of two bounding boxes"""
         x1_1, y1_1, x2_1, y2_1 = bbox1
         x1_2, y1_2, x2_2, y2_2 = bbox2
         
-        # 计算交集
+        # Calculate intersection
         x1_i = max(x1_1, x1_2)
         y1_i = max(y1_1, y1_2)
         x2_i = min(x2_1, x2_2)
@@ -153,7 +153,7 @@ class SAM2Handler:
         
         inter_area = (x2_i - x1_i) * (y2_i - y1_i)
         
-        # 计算并集
+        # Calculate union
         bbox1_area = (x2_1 - x1_1) * (y2_1 - y1_1)
         bbox2_area = (x2_2 - x1_2) * (y2_2 - y1_2)
         union_area = bbox1_area + bbox2_area - inter_area
@@ -162,49 +162,49 @@ class SAM2Handler:
     
     def _remove_floor_from_mask(self, mask, image_np):
         """
-        智能移除地板区域（如果存在）
+        Intelligently remove floor region (if exists)
         
-        策略：
-        1. 只分析底部 30% 区域
-        2. 检测是否有大面积横向连续区域（地板特征）
-        3. 通过形状（宽高比）判断是否为地板
-        4. 使用颜色过滤移除相似颜色的底部区域
-        5. 保护机制：底部区域太小则不处理
+        Strategy:
+        1. Only analyze bottom 30% region
+        2. Detect if there's a large horizontally continuous area (floor feature)
+        3. Judge if it's floor through shape (aspect ratio)
+        4. Use color filtering to remove similar colored bottom regions
+        5. Protection mechanism: don't process if bottom region is too small
         
         Args:
-            mask: 布尔型 mask 数组
-            image_np: 原始图像数组（用于颜色分析）
+            mask: Boolean mask array
+            image_np: Original image array (for color analysis)
         
         Returns:
-            处理后的 mask
+            Processed mask
         """
         from scipy import ndimage
         
         height, width = mask.shape
         
-        # 1. 分析底部 30% 区域
-        bottom_threshold = int(height * 0.7)  # 从 70% 高度开始往下
+        # 1. Analyze bottom 30% region
+        bottom_threshold = int(height * 0.7)  # Start from 70% height downwards
         bottom_mask = mask.copy()
-        bottom_mask[:bottom_threshold, :] = False  # 只保留底部
+        bottom_mask[:bottom_threshold, :] = False  # Only keep bottom
         
         bottom_area = np.sum(bottom_mask)
         total_area = np.sum(mask)
         
-        # 保护机制：如果底部区域太小，说明没地板
+        # Protection mechanism: if bottom region is too small, there's no floor
         if total_area == 0 or bottom_area / total_area < 0.15:
-            print("   ℹ️  底部区域较小，无需处理")
+            print("   ℹ️  Bottom region is small, no processing needed")
             return mask
         
-        print(f"   🔍 检测到底部区域占比 {bottom_area/total_area*100:.1f}%，分析地板...")
+        print(f"   🔍 Detected bottom region ratio {bottom_area/total_area*100:.1f}%, analyzing floor...")
         
-        # 2. 检查底部是否是"横向大面积连续"（地板特征）
-        # 使用连通域分析
+        # 2. Check if bottom is 'large horizontally continuous' (floor feature)
+        # Use connected component analysis
         labeled_bottom, num_features = ndimage.label(bottom_mask)
         
         if num_features == 0:
             return mask
         
-        # 找到最大的连通域（可能是地板）
+        # Find largest connected component (possibly floor)
         largest_component_size = 0
         largest_component_label = 0
         for i in range(1, num_features + 1):
@@ -213,12 +213,12 @@ class SAM2Handler:
                 largest_component_size = size
                 largest_component_label = i
         
-        # 如果最大连通域占底部区域不到 50%，说明不是地板
+        # If largest component occupies less than 50% of bottom region, it's not floor
         if largest_component_size / bottom_area < 0.5:
-            print("   ℹ️  底部无大面积连续区域，无需处理")
+            print("   ℹ️  No large continuous area at bottom, no processing needed")
             return mask
         
-        # 3. 分析最大连通域的形状（宽高比）
+        # 3. Analyze shape of largest component (aspect ratio)
         largest_component_mask = (labeled_bottom == largest_component_label)
         rows = np.any(largest_component_mask, axis=1)
         cols = np.any(largest_component_mask, axis=0)
@@ -233,36 +233,36 @@ class SAM2Handler:
         component_width = x2 - x1 + 1
         aspect_ratio = component_width / component_height if component_height > 0 else 0
         
-        # 地板通常是扁平的（宽高比 > 2）
+        # Floor is typically flat (aspect ratio > 2)
         if aspect_ratio < 2:
-            print(f"   ℹ️  底部区域宽高比 {aspect_ratio:.2f}，不像地板")
+            print(f"   ℹ️  Bottom region aspect ratio {aspect_ratio:.2f}, doesn't look like floor")
             return mask
         
-        print(f"   ✅ 检测到地板特征（宽高比 {aspect_ratio:.2f}），开始颜色过滤...")
+        print(f"   ✅ Detected floor feature (aspect ratio {aspect_ratio:.2f}), starting color filtering...")
         
-        # 4. 颜色分析：提取底部连通域的主色调
+        # 4. Color analysis: Extract main color of bottom connected component
         bottom_region_pixels = image_np[largest_component_mask]
         
         if len(bottom_region_pixels) == 0:
             return mask
         
-        # 计算主色调（中位数，比均值更鲁棒）
+        # Calculate main color (median, more robust than mean)
         main_color = np.median(bottom_region_pixels, axis=0)
         
-        # 5. 移除与主色调相似的底部区域
-        # 计算每个像素与主色调的颜色距离（欧式距离）
+        # 5. Remove bottom regions similar to main color
+        # Calculate color distance of each pixel to main color (Euclidean distance)
         color_distance = np.sqrt(np.sum((image_np - main_color) ** 2, axis=2))
         
-        # 设置阈值（欧式距离 < 50 认为是相似颜色）
+        # Set threshold (Euclidean distance < 50 considered similar color)
         similar_color_mask = color_distance < 50
         
-        # 只在底部区域应用颜色过滤
+        # Only apply color filtering in bottom region
         floor_to_remove = largest_component_mask & similar_color_mask
         
-        # 6. 从原始 mask 中移除地板
+        # 6. Remove floor from original mask
         cleaned_mask = mask & ~floor_to_remove
         
         removed_area = np.sum(floor_to_remove)
-        print(f"   ✂️  移除地板区域：{removed_area} 像素 ({removed_area/total_area*100:.1f}%)")
+        print(f"   ✂️  Removing floor region: {removed_area} pixels ({removed_area/total_area*100:.1f}%)")
         
         return cleaned_mask

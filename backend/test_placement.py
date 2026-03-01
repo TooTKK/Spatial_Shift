@@ -1,5 +1,5 @@
 """
-测试家具放置完整流程
+Test complete furniture placement workflow
 """
 import sys
 import os
@@ -11,24 +11,24 @@ from furniture_placement import FurniturePlacer
 
 
 def test_full_workflow():
-    """测试完整工作流：分割 -> 移除 -> 放置"""
+    """Test complete workflow: segment → remove → place"""
     
     print("=" * 60)
-    print("🚀 开始测试家具智能移动完整流程")
+    print("🚀 Starting complete furniture smart move workflow test")
     print("=" * 60)
     
-    # 配置
-    test_image = "./blue.png"  # 替换为你的测试图片
-    furniture_click = ( 186, 277)  # 家具位置（需替换）
-    new_position = (457, 281)     # 新位置（需替换）
+    # Configuration
+    test_image = "./blue.png"  # Replace with your test image
+    furniture_click = ( 186, 277)  # Furniture position (need replacement)
+    new_position = (457, 281)     # New position (need replacement)
     
     if not os.path.exists(test_image):
-        print(f"❌ 测试图片不存在: {test_image}")
-        print("📝 请创建 test_images/ 目录并放入室内照片")
+        print(f"❌ Test image does not exist: {test_image}")
+        print("📝 Please create test_images/ directory and place indoor photos inside")
         return
     
-    # 初始化所有模块
-    print("\n📦 初始化模型...")
+    # Initialize all modules
+    print("\n📦 Initializing models...")
     sam = SAM2Handler(
         checkpoint_path="checkpoints/sam2.1_hiera_large.pt",
         model_config="configs/sam2.1/sam2.1_hiera_l.yaml"
@@ -36,9 +36,9 @@ def test_full_workflow():
     inpainter = CloudInpainter()
     placer = FurniturePlacer()
     
-    # 步骤1：SAM智能分割家具（自动识别相关物体）
+    # Step 1: SAM smart furniture segmentation (automatically recognize related objects)
     print("\n" + "=" * 60)
-    print("📍 步骤1: SAM智能分割家具")
+    print("📍 Step 1: SAM smart furniture segmentation")
     print("=" * 60)
     furniture_path = "output/furniture/test_furniture.png"
     os.makedirs("output/furniture", exist_ok=True)
@@ -48,30 +48,30 @@ def test_full_workflow():
         furniture_click[0],
         furniture_click[1],
         furniture_path,
-        iou_threshold=0.1  # IoU阈值，控制识别相关物体的范围
+        iou_threshold=0.1  # IoU threshold, controls range of related object recognition
     )
-    print(f"✅ 智能识别完成！置信度: {score:.2f}")
-    print(f"   额外识别到 {related_count} 个相关物体（如椅子脚、靠枕等）")
-    print(f"   保存至: {furniture_path}")
+    print(f"✅ Smart recognition complete! Confidence: {score:.2f}")
+    print(f"   Additionally identified {related_count} related objects (such as chair legs, cushions, etc.)")
+    print(f"   Saved to: {furniture_path}")
     
-    # 步骤2：Inpainting移除家具
+    # Step 2: Inpainting to remove furniture
     print("\n" + "=" * 60)
-    print("🎨 步骤2: 移除家具，生成干净背景")
+    print("🎨 Step 2: Remove furniture, generate clean background")
     print("=" * 60)
     background_path = "output/backgrounds/test_clean_bg.png"
     os.makedirs("output/backgrounds", exist_ok=True)
     
     clean_bg = inpainter.inpaint(
         test_image,
-        furniture_path,  # 传入路径
+        furniture_path,  # Pass path
         background_path
     )
-    print(f"✅ 背景修复完成！")
-    print(f"   保存至: {background_path}")
+    print(f"✅ Background repair complete!")
+    print(f"   Saved to: {background_path}")
     
-    # 步骤3：Poisson Blending放置（快速测试）
+    # Step 3: Poisson Blending placement (quick test)
     print("\n" + "=" * 60)
-    print("🖼️  步骤3a: Poisson Blending 放置家具")
+    print("🖼️  Step 3a: Poisson Blending furniture placement")
     print("=" * 60)
     os.makedirs("output/placed", exist_ok=True)
     
@@ -80,16 +80,16 @@ def test_full_workflow():
         background_path,
         new_position[0],
         new_position[1],
-        furniture_click[0],  # 原位置X
-        furniture_click[1],  # 原位置Y
+        furniture_click[0],  # Original position X
+        furniture_click[1],  # Original position Y
         output_path="output/placed/test_poisson.png"
     )
-    print(f"✅ Poisson融合完成！")
-    print(f"   保存至: {poisson_result}")
+    print(f"✅ Poisson blending complete!")
+    print(f"   Saved to: {poisson_result}")
     
-    # 步骤4：AI Blending放置（可选，需要API token）
+    # Step 4: AI Blending placement (optional, requires API token)
     # print("\n" + "=" * 60)
-    # print("🤖 步骤3b: AI智能融合放置家具")
+    # print("🤖 Step 3b: AI smart blending furniture placement")
     # print("=" * 60)
     
     # if placer.replicate_token:
@@ -102,21 +102,21 @@ def test_full_workflow():
     #         furniture_click[1],
     #         output_path="output/placed/test_ai.png"
     #     )
-    #     print(f"✅ AI融合完成！")
-    #     print(f"   保存至: {ai_result}")
+    #     print(f"✅ AI blending complete!")
+    #     print(f"   Saved to: {ai_result}")
     # else:
-    #     print("⚠️  跳过AI融合（需要REPLICATE_API_TOKEN）")
+    #     print("⚠️  Skipping AI blending (requires REPLICATE_API_TOKEN)")
     
-    # 总结
+    # Summary
     print("\n" + "=" * 60)
-    print("🎉 测试完成！请查看以下输出文件：")
+    print("🎉 Test complete! Please check the following output files:")
     print("=" * 60)
-    print(f"1. 家具抠图:     {furniture_path}")
-    print(f"2. 干净背景:     {background_path}")
-    print(f"3. Poisson结果:  output/placed/test_poisson.png")
+    print(f"1. Furniture cutout:     {furniture_path}")
+    print(f"2. Clean background:     {background_path}")
+    print(f"3. Poisson result:       output/placed/test_poisson.png")
     if placer.replicate_token:
-        print(f"4. AI融合结果:   output/placed/test_ai.png")
-    print("\n💡 提示：在浏览器中打开这些图片查看效果")
+        print(f"4. AI blending result:   output/placed/test_ai.png")
+    print("\n💡 Tip: Open these images in a browser to view the results")
     print("=" * 60)
 
 

@@ -1,6 +1,6 @@
 """
-豆包 API Inpainting 模块
-使用火山引擎 Ark SDK
+Doubao API Inpainting Module
+Using Volcano Engine Ark SDK
 """
 import os
 import base64
@@ -12,38 +12,38 @@ from volcenginesdkarkruntime import Ark
 
 class DoubaoInpainter:
     def __init__(self):
-        """初始化豆包 Inpainting"""
+        """Initialize Doubao Inpainting"""
         self.api_key = os.getenv("ARK_API_KEY")
         
         if not self.api_key:
-            raise ValueError("❌ 请在 .env 文件中设置 ARK_API_KEY")
+            raise ValueError("❌ Please set ARK_API_KEY in .env file")
         
         self.client = Ark(
             base_url="https://ark.cn-beijing.volces.com/api/v3",
             api_key=self.api_key
         )
-        print("✅ 豆包 API 初始化成功")
+        print("✅ Doubao API initialized successfully")
     
     def image_to_base64(self, image_path_or_array):
-        """将图片转为 base64"""
+        """Convert image to base64"""
         if isinstance(image_path_or_array, str):
-            # 如果是路径，读取图片
+            # If it's a path, read image
             image = Image.open(image_path_or_array).convert("RGB")
         elif isinstance(image_path_or_array, np.ndarray):
-            # 如果是 numpy 数组
+            # If it's numpy array
             image = Image.fromarray(image_path_or_array)
         else:
-            # 如果已经是 PIL Image
+            # If it's already PIL Image
             image = image_path_or_array
         
-        # 转为 base64
+        # Convert to base64
         buffer = BytesIO()
         image.save(buffer, format="PNG")
         return base64.b64encode(buffer.getvalue()).decode()
     
     def get_position_description(self, x, y, width, height):
-        """将坐标转为相对位置描述"""
-        # 水平位置
+        """Convert coordinates to relative position description"""
+        # Horizontal position
         if x < width * 0.33:
             h_pos = "left third"
         elif x < width * 0.67:
@@ -51,7 +51,7 @@ class DoubaoInpainter:
         else:
             h_pos = "right third"
         
-        # 垂直位置
+        # Vertical position
         if y < height * 0.33:
             v_pos = "upper third"
         elif y < height * 0.67:
@@ -63,109 +63,109 @@ class DoubaoInpainter:
     
     def inpaint(self, image_path, mask_path, output_path, target_x=None, target_y=None):
         """
-        使用豆包 API 进行家具移动效果图生成
+        Use Doubao API to generate furniture movement effect image
         
         Args:
-            image_path: 原图路径
-            mask_path: mask 路径（白色=要移动的家具）
-            output_path: 输出路径
-            target_x: 目标 X 坐标（像素）
-            target_y: 目标 Y 坐标（像素）
+            image_path: Original image path
+            mask_path: mask path (white = furniture to move)
+            output_path: Output path
+            target_x: Target X coordinate (pixels)
+            target_y: Target Y coordinate (pixels)
         
         Returns:
-            输出文件路径
+            Output file path
         """
         try:
-            print(f"⏳ 调用豆包 API 生成家具移动效果图...")
-            print(f"   原图: {image_path}")
+            print(f"⏳ Calling Doubao API to generate furniture movement effect image...")
+            print(f"   Original image: {image_path}")
             print(f"   Mask: {mask_path}")
             if target_x is not None and target_y is not None:
-                print(f"   目标位置: ({target_x}, {target_y})")
+                print(f"   Target position: ({target_x}, {target_y})")
             
-            # 读取图片和 mask
+            # Read image and mask
             image = Image.open(image_path).convert("RGB")
             mask = Image.open(mask_path).convert("L")
             width, height = image.size
             
-            # 生成 prompt（结合坐标和相对位置）
+            # Generate prompt (combining coordinates and relative position)
             if target_x is not None and target_y is not None:
                 position_desc = self.get_position_description(target_x, target_y, width, height)
-                prompt = f"""我有一张房间的图片，请将 mask 标记的家具移动到目标位置：像素坐标 ({target_x}, {target_y})，大约在图片的 {position_desc} 区域。
+                prompt = f"""I have a room image. Please move the furniture marked by the mask to the target position: pixel coordinates ({target_x}, {target_y}), approximately in the {position_desc} area of the image.
 
-要求：
-1. 完全保持原有房间样子（墙壁、地板、窗户、门）不变
-2. 将家具放置在指定位置，并符合正确的透视关系
-5. 不改变房间的整体布局
-6. 别的什么都不可以变！就是家具的移动！我手上有一个人质，如果你生成的不好我就把他结果了，你最好好好表现。
+Requirements:
+1. Keep the original room appearance (walls, floor, windows, doors) completely unchanged
+2. Place the furniture at the specified position with correct perspective
+5. Do not change the overall layout of the room
+6. Nothing else can change! Just the furniture movement! I have a hostage in hand. If you don't generate it well, I'll finish him off. You better perform well.
 
-输出：家具在新位置的照片级真实可视化效果图。"""
+Output: Photo-realistic visualization of furniture at the new position."""
             else:
-                prompt = "将 mask 标记的家具移动到新位置。保持房间结构不变。专业室内渲染。"
+                prompt = "Move the furniture marked by mask to new position. Keep room structure unchanged. Professional interior rendering."
             
             print(f"   Prompt: {prompt[:100]}...")
             
-            # 将 mask 转为 base64（豆包可能需要这个格式）
+            # Convert mask to base64 (Doubao might need this format)
             image_b64 = self.image_to_base64(image)
             mask_b64 = self.image_to_base64(mask)
             
-            # 调用豆包 API（根据豆包文档，可能需要调整参数）
-            # 注意：这里假设豆包支持 inpainting，如果不支持需要用其他方式
+            # Call Doubao API (may need to adjust parameters according to Doubao docs)
+            # Note: This assumes Doubao supports inpainting, if not need other methods
             response = self.client.images.generate(
                 model="doubao-seedream-4-0-250828",
                 prompt=prompt,
-                # 以下参数可能需要根据豆包实际 API 调整
-                # image=image_b64,  # 如果支持图生图
-                # mask=mask_b64,    # 如果支持 mask
+                # Following parameters may need adjustment according to Doubao's actual API
+                # image=image_b64,  # If supports image-to-image
+                # mask=mask_b64,    # If supports mask
                 response_format="url",
                 size="2K",
                 stream=False,
                 watermark=False
             )
             
-            # 获取结果 URL
+            # Get result URL
             result_url = response.data[0].url
-            print(f"✅ 豆包 API 返回结果: {result_url}")
+            print(f"✅ Doubao API returned result: {result_url}")
             
-            # 下载图片
+            # Download image
             import requests
             img_data = requests.get(result_url).content
             result_image = Image.open(BytesIO(img_data))
             
-            # 保存结果
+            # Save result
             result_image.save(output_path)
-            print(f"✅ Inpainting 完成！保存到: {output_path}")
+            print(f"✅ Inpainting complete! Saved to: {output_path}")
             return output_path
             
         except Exception as e:
-            print(f"❌ 豆包 API 调用失败: {str(e)}")
-            print(f"   错误详情: {type(e).__name__}")
+            print(f"❌ Doubao API call failed: {str(e)}")
+            print(f"   Error details: {type(e).__name__}")
             
-            # Fallback: 使用简单的图像修复
-            print("⏳ 使用 OpenCV 基础修复作为备用...")
+            # Fallback: Use simple image repair
+            print("⏳ Using OpenCV basic repair as fallback...")
             return self._opencv_fallback(image_path, mask_path, output_path)
     
     def _opencv_fallback(self, image_path, mask_path, output_path):
-        """OpenCV 备用方案"""
+        """OpenCV fallback solution"""
         import cv2
         
         image = cv2.imread(image_path)
         mask = cv2.imread(mask_path, cv2.IMREAD_GRAYSCALE)
         
-        # 确保 mask 是二值的
+        # Ensure mask is binary
         _, mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
         
-        # 使用 OpenCV inpaint
+        # Use OpenCV inpaint
         result = cv2.inpaint(image, mask, 3, cv2.INPAINT_TELEA)
         cv2.imwrite(output_path, result)
         
-        print(f"✅ OpenCV 修复完成: {output_path}")
+        print(f"✅ OpenCV repair complete: {output_path}")
         return output_path
 
 
-# 便捷函数
+# Convenience function
 def remove_object_doubao(image_path, mask_path, output_path):
     """
-    使用豆包 API 移除物体
+    Use Doubao API to remove object
     """
     inpainter = DoubaoInpainter()
     return inpainter.inpaint(image_path, mask_path, output_path)
