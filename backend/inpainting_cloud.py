@@ -40,11 +40,11 @@ class CloudInpainter:
             
             # 使用支持 inpainting 的模型
             output = replicate.run(
-                "stability-ai/stable-diffusion-inpainting",
+                "stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd68b3",
                 input={
                     "image": open(image_path, "rb"),
                     "mask": open(mask_path, "rb"),
-                    "prompt": "empty clean room, interior, no furniture, smooth walls, clean floor",
+                    "prompt": "remove the object, seamless background inpainting",
                     "negative_prompt": "furniture, objects, desk, chair, table, cluttered",
                     "num_inference_steps": 25,
                     "guidance_scale": 7.5
@@ -60,13 +60,13 @@ class CloudInpainter:
             print(f"⚠️  Replicate API 失败: {str(e)}")
             return None
     
-    def inpaint(self, image_path, mask_array, output_path):
+    def inpaint(self, image_path, mask_input, output_path):
         """
         智能 inpainting：优先 Replicate，fallback 到 OpenCV
         
         Args:
             image_path: 原始图片路径
-            mask_array: SAM 输出的 mask (numpy array, boolean)
+            mask_input: SAM mask (numpy array, boolean) 或 mask图片路径 (str)
             output_path: 输出路径
         
         Returns:
@@ -76,8 +76,18 @@ class CloudInpainter:
         image = Image.open(image_path).convert("RGB")
         image_np = np.array(image)
         
-        # 2. 创建 mask
-        mask_uint8 = (mask_array * 255).astype(np.uint8)
+        # 2. 处理 mask 输入（支持数组或路径）
+        if isinstance(mask_input, str):
+            # 如果是路径，读取PNG的alpha通道作为mask
+            mask_img = Image.open(mask_input)
+            if mask_img.mode == 'RGBA':
+                mask_array = np.array(mask_img.split()[-1]) > 128
+            else:
+                mask_array = np.array(mask_img.convert('L')) > 128
+            mask_uint8 = (mask_array * 255).astype(np.uint8)
+        else:
+            # 如果是数组，直接转换
+            mask_uint8 = (mask_input * 255).astype(np.uint8)
         
         # 确保尺寸一致
         if mask_uint8.shape != image_np.shape[:2]:
