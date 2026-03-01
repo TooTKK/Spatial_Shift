@@ -40,11 +40,11 @@ class CloudInpainter:
             
             # 使用支持 inpainting 的模型
             output = replicate.run(
-                "stability-ai/stable-diffusion-inpainting:95b7223104132402a9ae91cc677285bc5eb997834bd2349fa486f53910fd68b3",
+                "stability-ai/stable-diffusion-inpainting",
                 input={
                     "image": open(image_path, "rb"),
                     "mask": open(mask_path, "rb"),
-                    "prompt": "remove the object, seamless background inpainting",
+                    "prompt": "empty clean room, interior, no furniture, smooth walls, clean floor",
                     "negative_prompt": "furniture, objects, desk, chair, table, cluttered",
                     "num_inference_steps": 25,
                     "guidance_scale": 7.5
